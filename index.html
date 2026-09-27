@@ -104,8 +104,8 @@
   td { padding: 0; }
   .sheet tbody tr:nth-child(even) td { background: var(--zebra); }
   .sheet tbody tr.is-dc td { background: var(--ok-soft); }
-  col.c-bed { width: 6%; } col.c-dx { width: 18%; } col.c-fever { width: 12%; }
-  col.c-obj { width: 20%; } col.c-plan { width: 20%; } col.c-inv { width: 18%; } col.c-dc { width: 6%; }
+  col.c-bed { width: 5%; } col.c-dx { width: 16%; } col.c-fever { width: 11%; } col.c-obj { width: 17%; }
+  col.c-plan { width: 16%; } col.c-order { width: 16%; } col.c-inv { width: 14%; } col.c-dc { width: 5%; }
   col.c-act { width: 38px; }
 
   .cell {
@@ -167,13 +167,31 @@
   .ask-actions { display: flex; justify-content: flex-end; gap: 8px; }
   .danger-fill { background: var(--fever); border-color: var(--fever); color: #fff; font-weight: 600; }
 
+  /* order summary */
+  #sum { width: min(560px, calc(100vw - 32px)); max-width: none; padding: 0; }
+  .sum-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 16px 20px 10px; border-bottom: 1px solid var(--line); }
+  .sum-head h2 { margin: 0; font-size: 19px; color: var(--brand-ink); }
+  .sum-sub { font-size: 13px; color: var(--muted); }
+  .sum-body { max-height: min(60vh, 520px); overflow-y: auto; padding: 8px 20px; }
+  .sum-bed { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .sum-bed:last-child { border-bottom: none; }
+  .sum-bed h3 { margin: 0 0 6px; font-size: 16px; display: flex; gap: 8px; align-items: baseline; }
+  .sum-dx { font-size: 13px; font-weight: 400; color: var(--muted); }
+  .sum-bed label { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; cursor: pointer; line-height: 1.5; }
+  .sum-bed input { width: 19px; height: 19px; margin: 2px 0 0; accent-color: var(--ok); flex: none; }
+  .sum-bed label.done span { text-decoration: line-through; color: var(--muted); }
+  .sum-empty { color: var(--muted); padding: 24px 0; text-align: center; line-height: 1.6; }
+  .sum-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; padding: 12px 20px 16px; border-top: 1px solid var(--line); }
+  .sum-foot .note { flex: 1; font-size: 13px; color: var(--muted); }
+  .sum-copy { width: 100%; min-height: 90px; font: inherit; font-size: 13px; color: var(--ink); background: var(--btn); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+
   .busy {
     position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
     background: var(--bg); color: var(--muted); font-size: 16px;
   }
 
-  /* ---------- phone: one card per bed ---------- */
-  @media (max-width: 760px) {
+  /* ---------- phone / narrow window: one card per bed (9 columns need ~1000px) ---------- */
+  @media (max-width: 1000px) {
     body { font-size: 16px; }   /* 16px+ stops iOS zooming into fields */
     .wrap { padding: 10px 16px; }
     .toolbar { position: static; gap: 6px; }
@@ -257,6 +275,7 @@
     <button id="clear" type="button" class="danger">Clear</button>
     <span class="saved" id="saved" role="status"></span>
     <span class="spacer"></span>
+    <button id="sumBtn" type="button">สรุป Order</button>
     <button id="pdf" type="button" class="primary">Export PDF</button>
   </div>
 
@@ -275,10 +294,10 @@
 
     <table>
       <colgroup>
-        <col class="c-bed"><col class="c-dx"><col class="c-fever"><col class="c-obj"><col class="c-plan"><col class="c-inv"><col class="c-dc"><col class="c-act">
+        <col class="c-bed"><col class="c-dx"><col class="c-fever"><col class="c-obj"><col class="c-plan"><col class="c-order"><col class="c-inv"><col class="c-dc"><col class="c-act">
       </colgroup>
       <thead>
-        <tr><th>เตียง</th><th>Diagnosis</th><th>ไข้</th><th>Objective</th><th>Plan</th><th>สิ่งที่ต้องไปตรวจเพิ่ม</th><th>D/C</th><th class="act"></th></tr>
+        <tr><th>เตียง</th><th>Diagnosis</th><th>ไข้</th><th>Objective</th><th>Plan</th><th>Order</th><th>สิ่งที่ต้องไปตรวจเพิ่ม</th><th>D/C</th><th class="act"></th></tr>
       </thead>
       <tbody id="rows"></tbody>
     </table>
@@ -286,6 +305,19 @@
 
   <p class="hint" id="hint"></p>
 </div>
+
+<dialog id="sum" aria-labelledby="sumTitle">
+  <div class="sum-head">
+    <h2 id="sumTitle">สรุป Order</h2>
+    <span class="sum-sub" id="sumSub"></span>
+  </div>
+  <div class="sum-body" id="sumBody"></div>
+  <div class="sum-foot">
+    <span class="note" id="sumNote">ติ๊กเมื่อ order แล้ว</span>
+    <button id="sumCopy" type="button">คัดลอกรายการที่ค้าง</button>
+    <button id="sumClose" type="button" class="primary">ปิด</button>
+  </div>
+</dialog>
 
 <dialog id="ask">
   <p id="askMsg"></p>
@@ -308,7 +340,7 @@ function today() {
 function hhmm() { return new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }); }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
-function blankRow() { return { bed: '', dx: [], fever: '', temp: '', obj: '', plan: '', inv: [], dc: false }; }
+function blankRow() { return { bed: '', dx: [], fever: '', temp: '', obj: '', plan: '', order: [], inv: [], dc: false }; }
 function freshRound(date, keep) {
   return { ward: keep ? keep.ward : '', doctor: keep ? keep.doctor : '', date, rows: Array.from({ length: 8 }, blankRow) };
 }
@@ -321,7 +353,7 @@ function normalize(s) {
   const rows = (Array.isArray(s.rows) ? s.rows : []).map(r => ({
     bed: String(r.bed || ''), dx: toItems(r.dx),
     fever: r.fever === 'yes' || r.fever === 'no' ? r.fever : '', temp: String(r.temp || ''),
-    obj: String(r.obj || ''), plan: String(r.plan || ''), inv: toItems(r.inv), dc: !!r.dc
+    obj: String(r.obj || ''), plan: String(r.plan || ''), order: toItems(r.order), inv: toItems(r.inv), dc: !!r.dc
   }));
   return {
     ward: String(s.ward || ''), doctor: String(s.doctor || ''),
@@ -329,7 +361,7 @@ function normalize(s) {
   };
 }
 const same = (a, b) => JSON.stringify(normalize(a)) === JSON.stringify(normalize(b));
-function rowHasData(r) { return !!(r.bed || r.dx.length || r.fever || r.obj || r.plan || r.inv.length || r.dc); }
+function rowHasData(r) { return !!(r.bed || r.dx.length || r.fever || r.obj || r.plan || r.order.length || r.inv.length || r.dc); }
 function hasData() { return state.rows.some(rowHasData); }
 
 // ---------- state + local cache ----------
@@ -397,6 +429,7 @@ function editing() {
 function applyRemote(remote, note) {
   state = remote;
   render();
+  if ($('sum').open) renderSummary();
   saveLocalNow();
   status(note || '☁ อัปเดตจากอีกเครื่องแล้ว ' + hhmm());
 }
@@ -465,7 +498,7 @@ function buildChecklist(box, items, opts = { numbered: false, ph: '+ เพิ�
   const add = document.createElement('input');
   add.className = 'ck-add';
   add.placeholder = items.length ? '+ เพิ่ม' : opts.ph;
-  add.setAttribute('aria-label', opts.numbered ? 'เพิ่ม Diagnosis' : 'เพิ่มสิ่งที่ต้องไปตรวจ');
+  add.setAttribute('aria-label', 'เพิ่ม ' + opts.ph.replace(/^\+\s*/, ''));
 
   const focusEnd = el => {
     el.focus();
@@ -546,11 +579,13 @@ function render() {
       </td>
       <td data-label="Objective"><div class="cell" contenteditable data-k="obj" data-ph="V/S, PE, Lab"></div></td>
       <td data-label="Plan"><div class="cell" contenteditable data-k="plan" data-ph="Plan"></div></td>
+      <td data-label="Order"><div class="checklist order"></div></td>
       <td data-label="สิ่งที่ต้องไปตรวจเพิ่ม"><div class="checklist inv"></div></td>
       <td class="dc"><label><input type="checkbox" aria-label="D/C"><span class="dc-lbl">D/C</span></label></td>
       <td class="act"><button type="button" title="ลบแถวนี้" aria-label="ลบแถวนี้">✕</button></td>`;
 
     buildChecklist(tr.querySelector('.checklist.dx'), r.dx, { numbered: true, ph: '+ Diagnosis' });
+    buildChecklist(tr.querySelector('.checklist.order'), r.order, { numbered: false, ph: '+ order เช่น CBC, CXR' });
     buildChecklist(tr.querySelector('.checklist.inv'), r.inv);
 
     tr.querySelectorAll('.cell').forEach(c => {
@@ -613,6 +648,67 @@ $('clear').addEventListener('click', async () => {
   render(); changed();
 });
 
+// ---------- order summary: every bed that has orders, tick them off after the round ----------
+const bedName = r => r.bed ? 'เตียง ' + r.bed : 'เตียง (ไม่ระบุเลข)';
+function renderSummary() {
+  const beds = state.rows.filter(r => r.order.length);
+  const all = beds.reduce((n, r) => n + r.order.length, 0);
+  const left = beds.reduce((n, r) => n + r.order.filter(o => !o.done).length, 0);
+  $('sumSub').textContent = all
+    ? `${state.date.split('-').reverse().join('/')} · ค้าง ${left} จาก ${all} รายการ`
+    : state.date.split('-').reverse().join('/');
+  $('sumCopy').hidden = !left;
+  $('sumNote').textContent = all ? (left ? 'ติ๊กเมื่อ order แล้ว' : 'order ครบทุกรายการแล้ว') : '';
+  const body = $('sumBody');
+  body.innerHTML = '';
+  if (!all) {
+    body.innerHTML = '<p class="sum-empty">ยังไม่มี order ใน round นี้<br>เพิ่มได้ในช่อง Order ของแต่ละเตียง</p>';
+    return;
+  }
+  beds.forEach(r => {
+    const sec = document.createElement('div');
+    sec.className = 'sum-bed';
+    const dx = r.dx.map(d => d.t).join(', ');
+    sec.innerHTML = `<h3>${esc(bedName(r))}${dx ? `<span class="sum-dx">${esc(dx)}</span>` : ''}</h3>`;
+    r.order.forEach(o => {
+      const lab = document.createElement('label');
+      lab.className = o.done ? 'done' : '';
+      lab.innerHTML = '<input type="checkbox"><span></span>';
+      lab.firstChild.checked = o.done;
+      lab.lastChild.textContent = o.t;
+      lab.firstChild.addEventListener('change', e => {
+        o.done = e.target.checked;
+        render(); changed(); renderSummary();
+      });
+      sec.appendChild(lab);
+    });
+    body.appendChild(sec);
+  });
+}
+function summaryText() {
+  const lines = [`Order round ${state.date.split('-').reverse().join('/')}${state.ward ? ' ' + state.ward : ''}`];
+  state.rows.forEach(r => {
+    const left = r.order.filter(o => !o.done).map(o => o.t);
+    if (left.length) lines.push(`${bedName(r)}: ${left.join(', ')}`);
+  });
+  return lines.join('\n');
+}
+$('sumBtn').addEventListener('click', () => { renderSummary(); $('sum').showModal(); });
+$('sumClose').addEventListener('click', () => $('sum').close());
+$('sumCopy').addEventListener('click', () => {
+  const text = summaryText();
+  const fallback = () => {
+    // clipboard refused: show the text selected so the viewer can copy it themselves
+    let ta = $('sumBody').querySelector('.sum-copy');
+    if (!ta) { ta = document.createElement('textarea'); ta.className = 'sum-copy'; ta.readOnly = true; $('sumBody').prepend(ta); }
+    ta.value = text; ta.focus(); ta.select();
+    $('sumNote').textContent = 'กดค้างที่ข้อความแล้วเลือกคัดลอก';
+  };
+  try {
+    navigator.clipboard.writeText(text).then(() => { $('sumNote').textContent = 'คัดลอกแล้ว วางในแชทได้เลย'; }, fallback);
+  } catch (e) { fallback(); }
+});
+
 // ---------- PDF: draw A4 landscape pages off-screen, rasterise, hand the file over ----------
 const LIBS = [
   'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
@@ -630,13 +726,15 @@ const pbox = on => `<span class="pbox">${on ? '✓' : ''}</span>`;
 function pdfRow(r) {
   const yes = r.fever === 'yes';
   const dx = r.dx.map((it, i) => `<span class="pdf-n">${i + 1}.</span> ${esc(it.t)}`).join('<br>');
-  const inv = r.inv.map(it => `${pbox(it.done)}<span class="${it.done ? 'p-done' : ''}">${esc(it.t)}</span>`).join('<br>');
+  const ticks = items => items.map(it => `${pbox(it.done)}<span class="${it.done ? 'p-done' : ''}">${esc(it.t)}</span>`).join('<br>');
+  const inv = ticks(r.inv);
   return `<tr class="${r.dc ? 'is-dc' : ''}">
     <td class="pdf-bed">${esc(r.bed)}</td>
     <td>${dx}</td>
     <td>${pbox(r.fever === 'no')}ไม่มี<br><span class="${yes ? 'p-hot' : ''}">${pbox(yes)}มี T <span class="p-t">${yes ? esc(r.temp) : ''}</span> °C</span></td>
     <td>${esc(r.obj)}</td>
     <td>${esc(r.plan)}</td>
+    <td>${ticks(r.order)}</td>
     <td>${inv}</td>
     <td class="pdf-dc">${pbox(r.dc)}</td></tr>`;
 }
@@ -650,8 +748,8 @@ function pdfPage(host) {
       <div class="pdf-meta"><span>Ward: <b>${esc(state.ward)}</b></span><span>วันที่: <b>${esc(state.date.split('-').reverse().join('/'))}</b></span><span>แพทย์: <b>${esc(state.doctor)}</b></span></div>
     </div>
     <table class="pdf-table">
-      <colgroup><col style="width:6%"><col style="width:18%"><col style="width:13%"><col style="width:20%"><col style="width:20%"><col style="width:17%"><col style="width:6%"></colgroup>
-      <thead><tr><th>เตียง</th><th>Diagnosis</th><th>ไข้</th><th>Objective</th><th>Plan</th><th>สิ่งที่ต้องไปตรวจเพิ่ม</th><th>D/C</th></tr></thead>
+      <colgroup><col style="width:5%"><col style="width:16%"><col style="width:12%"><col style="width:17%"><col style="width:16%"><col style="width:15%"><col style="width:14%"><col style="width:5%"></colgroup>
+      <thead><tr><th>เตียง</th><th>Diagnosis</th><th>ไข้</th><th>Objective</th><th>Plan</th><th>Order</th><th>สิ่งที่ต้องไปตรวจเพิ่ม</th><th>D/C</th></tr></thead>
       <tbody></tbody>
     </table></div>`;
   host.appendChild(page);
