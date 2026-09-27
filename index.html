@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ward Round</title>
+<style>
+  :root {
+    --ink: #111827;
+    --muted: #6b7280;
+    --line: #cbd5e1;
+    --brand: #1f3a5f;
+    --brand-soft: #e8eef6;
+    --fever: #b91c1c;
+    --fever-soft: #fde8e8;
+    --ok: #166534;
+    --ok-soft: #e3f4e8;
+    --bg: #f4f6f9;
+    --card: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Leelawadee UI", "Leelawadee", "Sarabun", Tahoma, sans-serif;
+    font-size: 15px;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 16px; }
+
+  /* ---------- toolbar ---------- */
+  .toolbar {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    background: var(--bg); padding: 10px 0;
+  }
+  .toolbar .spacer { flex: 1; }
+  .saved { font-size: 13px; color: var(--muted); }
+  .saved.err { color: var(--fever); }
+  button:disabled { opacity: .5; cursor: wait; }
+  button {
+    font: inherit; cursor: pointer;
+    border: 1px solid var(--line); background: #fff; color: var(--ink);
+    padding: 8px 14px; border-radius: 8px;
+  }
+  button:hover { border-color: var(--brand); }
+  button.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.12); }
+  button.danger { color: var(--fever); }
+
+  /* ---------- sheet ---------- */
+  .sheet { background: var(--card); border-radius: 12px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .header {
+    display: flex; flex-wrap: wrap; gap: 12px 20px;
+    align-items: flex-end; justify-content: space-between;
+    border-bottom: 2px solid var(--brand); padding-bottom: 8px; margin-bottom: 12px;
+  }
+  h1 { margin: 0; font-size: 24px; color: var(--brand); }
+  .meta { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+  .meta label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .meta input {
+    font: inherit; border: none; border-bottom: 1px dotted #666;
+    padding: 2px 4px; width: 140px; background: transparent;
+  }
+  .meta input:focus { outline: none; border-bottom: 1.5px solid var(--brand); }
+
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th, td { border: 1px solid #94a3b8; vertical-align: top; }
+  th { background: var(--brand); color: #fff; padding: 8px 6px; font-weight: 600; }
+  td { padding: 0; }
+  tbody tr:nth-child(even) td { background: #f8fafc; }
+  col.c-bed { width: 6%; } col.c-dx { width: 18%; } col.c-fever { width: 12%; }
+  col.c-obj { width: 20%; } col.c-plan { width: 20%; } col.c-inv { width: 18%; } col.c-dc { width: 6%; }
+
+  /* discharge */
+  .title { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .dc-count {
+    font-size: 14px; font-weight: 600; color: var(--ok);
+    background: var(--ok-soft); border-radius: 999px; padding: 3px 12px;
+  }
+  .dc { text-align: center; vertical-align: middle; }
+  .dc input { width: 22px; height: 22px; accent-color: var(--ok); cursor: pointer; margin: 0; }
+  tbody tr.is-dc td { background: var(--ok-soft); }
+  col.c-act { width: 38px; }
+
+  .cell {
+    min-height: 70px; padding: 8px; outline: none;
+    white-space: pre-wrap; word-break: break-word; line-height: 1.5;
+  }
+  .cell:focus { background: #fffbe6; box-shadow: inset 0 0 0 2px #f5c542; }
+  .cell:empty::before { content: attr(data-ph); color: #b6bcc6; }
+  .bed { text-align: center; font-weight: 700; font-size: 18px; }
+
+  /* fever control */
+  .fever { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { flex: 1; border: none; border-radius: 0; padding: 6px 4px; background: #fff; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on-no  { background: var(--ok-soft); color: var(--ok); font-weight: 700; }
+  .seg button.on-yes { background: var(--fever-soft); color: var(--fever); font-weight: 700; }
+  .temp { display: none; align-items: center; gap: 4px; }
+  .temp.show { display: flex; }
+  .temp input {
+    font: inherit; width: 64px; padding: 4px 6px; text-align: center;
+    border: 1px solid var(--line); border-radius: 6px;
+  }
+  .temp input.hot { border-color: var(--fever); color: var(--fever); font-weight: 700; }
+  .fever-print { display: none; }
+
+  /* bedside checklist */
+  .checklist { padding: 6px 8px; min-height: 70px; }
+  .ck { display: flex; align-items: flex-start; gap: 6px; padding: 2px 0; }
+  .ck input[type=checkbox] { width: 17px; height: 17px; margin: 3px 0 0; accent-color: var(--ok); cursor: pointer; flex: none; }
+  .ck-t { flex: 1; outline: none; line-height: 1.5; word-break: break-word; border-radius: 4px; padding: 0 2px; }
+  .ck-t:focus { background: #fffbe6; }
+  .ck.done .ck-t { text-decoration: line-through; color: var(--muted); }
+  .ck-n { width: 17px; flex: none; text-align: right; line-height: 1.5; font-weight: 600; color: var(--brand); }
+  .ck-add {
+    width: 100%; font: inherit; border: none; background: transparent;
+    padding: 3px 2px 3px 23px; outline: none; color: var(--ink);
+  }
+  .ck-add::placeholder { color: #b6bcc6; }
+  .ck-add:focus { background: #fffbe6; border-radius: 4px; }
+
+  .act { text-align: center; vertical-align: middle; }
+  .act button { border: none; background: none; color: #9ca3af; font-size: 18px; padding: 4px; }
+  .act button:hover { color: var(--fever); }
+
+  .hint { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  .dc label { display: inline-flex; cursor: pointer; }
+  .dc-lbl { display: none; }
+
+  /* ---------- phone: one card per bed ---------- */
+  @media screen and (max-width: 760px) {
+    body { font-size: 16px; }   /* 16px+ stops iOS zooming into fields */
+    .wrap { padding: 10px; }
+    .toolbar { position: static; gap: 6px; }
+    .toolbar .spacer { display: none; }
+    .toolbar button { padding: 9px 11px; }
+    .saved { order: 10; width: 100%; }
+    .sheet { padding: 12px; background: transparent; box-shadow: none; padding: 0; }
+    .header { background: var(--card); border-radius: 12px; padding: 12px; border-bottom: 3px solid var(--brand); }
+    h1 { font-size: 22px; }
+    .meta { width: 100%; flex-direction: column; gap: 8px; }
+    .meta label { width: 100%; }
+    .meta input { flex: 1; width: auto; font-size: 16px; }
+
+    table, tbody { display: block; }
+    colgroup, thead { display: none; }
+    tbody tr {
+      display: grid; grid-template-columns: 1fr auto auto; align-items: center;
+      background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+      margin-bottom: 12px; overflow: hidden;
+    }
+    tbody tr:nth-child(even) td, tbody tr td { background: transparent; }
+    tbody tr.is-dc { background: var(--ok-soft); border-color: #9fd3ae; }
+    td { display: block; border: none; border-top: 1px solid #e5e7eb; grid-column: 1 / -1; }
+    td[data-label]::before {
+      content: attr(data-label); display: block;
+      font-size: 12px; font-weight: 600; color: var(--muted); padding: 8px 10px 0;
+    }
+    /* first line of the card: bed | D/C | delete */
+    td.td-bed, td.dc, td.act { grid-row: 1; }
+    td.td-bed { grid-column: 1; border-top: none; display: flex; align-items: center; }
+    td.td-bed::before { padding: 0 0 0 12px; }
+    .bed { text-align: left; min-height: 0; padding: 10px; font-size: 20px; flex: 1; }
+    td.dc { grid-column: 2; border-top: none; padding: 0 6px; }
+    td.dc label { align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    .dc-lbl { display: inline; font-weight: 600; color: var(--ok); }
+    td.act { grid-column: 3; border-top: none; padding-right: 6px; }
+    td.act button { font-size: 22px; padding: 8px; }
+
+    .cell, .checklist { min-height: 44px; }
+    .cell, .ck-t, .ck-add, .temp input { font-size: 16px; }
+    .fever { flex-direction: row; flex-wrap: wrap; align-items: center; }
+    .seg { flex: 0 0 170px; }
+    .seg button { padding: 9px 4px; }
+    .ck input[type=checkbox] { width: 20px; height: 20px; margin-top: 2px; }
+    .hint { padding: 0 4px; }
+  }
+
+  /* ---------- print / PDF ---------- */
+  @page { size: A4 landscape; margin: 10mm; }
+  @media print {
+    body { background: #fff; font-size: 11pt; }
+    .wrap { max-width: none; padding: 0; }
+    .toolbar, .hint, .act, col.c-act, th.act { display: none !important; }
+    .sheet { box-shadow: none; padding: 0; border-radius: 0; }
+    .meta input { width: 120px; }
+    .meta input::-webkit-calendar-picker-indicator { display: none; }
+    th { background: var(--brand) !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    tbody tr:nth-child(even) td { background: #f3f6fa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    tbody tr.is-dc td { background: var(--ok-soft) !important; }
+    .dc-count, .dc input { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .dc input { width: 15px; height: 15px; }
+    tr { page-break-inside: avoid; }
+    thead { display: table-header-group; }
+    .cell { min-height: 17mm; padding: 5px 6px; }
+    .cell:empty::before { content: ""; }
+    .fever .seg, .fever .temp { display: none !important; }
+    .fever-print { display: block; line-height: 1.8; font-size: 10.5pt; }
+    .box {
+      display: inline-block; width: 11px; height: 11px; border: 1.3px solid #222;
+      border-radius: 2px; vertical-align: -1px; margin-right: 4px; text-align: center;
+      font-size: 9px; line-height: 9px; font-weight: 700;
+    }
+    .fp-yes.on { color: var(--fever); font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .fp-t { display: inline-block; min-width: 40px; border-bottom: 1px dotted #555; text-align: center; }
+    .checklist { min-height: 17mm; padding: 5px 6px; }
+    .ck-add { display: none; }
+    .ck input[type=checkbox] { width: 13px; height: 13px; margin-top: 3px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="toolbar">
+    <button id="add">+ เพิ่มเตียง</button>
+    <button id="clear" class="danger">Clear</button>
+    <span class="saved" id="saved"></span>
+    <span class="spacer"></span>
+    <button id="pdf" class="primary">Export PDF</button>
+  </div>
+
+  <div class="sheet">
+    <div class="header">
+      <div class="title">
+        <h1>Ward Round</h1>
+        <span class="dc-count" id="dcCount"></span>
+      </div>
+      <div class="meta">
+        <label>Ward: <input id="ward"></label>
+        <label>วันที่: <input id="date" type="date"></label>
+        <label>แพทย์: <input id="doctor"></label>
+      </div>
+    </div>
+
+    <table>
+      <colgroup>
+        <col class="c-bed"><col class="c-dx"><col class="c-fever"><col class="c-obj"><col class="c-plan"><col class="c-inv"><col class="c-dc"><col class="c-act">
+      </colgroup>
+      <thead>
+        <tr><th>เตียง</th><th>Diagnosis</th><th>ไข้</th><th>Objective</th><th>Plan</th><th>สิ่งที่ต้องไปตรวจเพิ่ม</th><th>D/C</th><th class="act"></th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <p class="hint">
+    ข้อมูลบันทึกอัตโนมัติในเบราว์เซอร์เครื่องนี้ · กด <b>Export PDF</b> แล้วเลือก “Save as PDF” ในหน้าต่างพิมพ์
+    (มือถือ: iPhone กด แชร์ → บันทึกไปยังไฟล์ / Android เลือกเครื่องพิมพ์ “บันทึกเป็น PDF”)
+  </p>
+</div>
+
+<script>
+const KEY = 'ward-round-v1';
+const tbody = document.getElementById('rows');
+const $ = id => document.getElementById(id);
+
+function blankRow() { return { bed: '', dx: [], fever: '', temp: '', obj: '', plan: '', inv: [], dc: false }; }
+
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    // older saves kept "dx"/"inv" as plain text: turn each line into a list item
+    const toItems = v => String(v || '').split('\n').map(t => t.trim()).filter(Boolean).map(t => ({ t, done: false }));
+    if (s) s.rows.forEach(r => {
+      if (!Array.isArray(r.dx)) r.dx = toItems(r.dx);
+      if (!Array.isArray(r.inv)) r.inv = toItems(r.inv);
+      if (r.obj == null) r.obj = '';
+      r.dc = !!r.dc;
+    });
+    return s;
+  } catch (e) { return null; }
+}
+// local date (toISOString would give yesterday's date before 07:00 in Thailand)
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+let state = load() || {
+  ward: '', doctor: '',
+  date: today(),
+  rows: Array.from({ length: 8 }, blankRow)
+};
+
+let saveTimer;
+function save(note) {
+  updateDcCount();   // bed count changes as cells fill in
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+      status(note || 'บันทึกแล้ว ' + hhmm());
+    } catch (e) {
+      status('บันทึกอัตโนมัติไม่ได้ในเบราว์เซอร์นี้', true);
+    }
+  }, 300);
+}
+function hhmm() { return new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }); }
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function feverPrint(r) {
+  const no = r.fever === 'no', yes = r.fever === 'yes';
+  return `<span class="box">${no ? '✓' : ''}</span>ไม่มี<br>` +
+         `<span class="fp-yes ${yes ? 'on' : ''}"><span class="box">${yes ? '✓' : ''}</span>มี&nbsp; T <span class="fp-t">${esc(yes ? r.temp : '')}</span> °C</span>`;
+}
+
+// Item list: editable text per item, led by a tick box (checklist) or a number (numbered);
+// type in the bottom line + Enter to add, Backspace on an empty item removes it.
+function buildChecklist(box, items, opts = { numbered: false, ph: '+ เพิ่ม เช่น ฟัง lung, ดูแผล' }) {
+  box.innerHTML = '';
+  const add = document.createElement('input');
+  add.className = 'ck-add';
+  add.placeholder = items.length ? '+ เพิ่ม' : opts.ph;
+
+  const focusEnd = el => {
+    el.focus();
+    const sel = getSelection(); sel.selectAllChildren(el); sel.collapseToEnd();
+  };
+
+  items.forEach((it, j) => {
+    const row = document.createElement('div');
+    row.className = 'ck' + (it.done ? ' done' : '');
+    row.innerHTML = (opts.numbered ? `<span class="ck-n">${j + 1}.</span>` : '<input type="checkbox">') +
+                    '<div class="ck-t" contenteditable></div>';
+    const cb = row.firstChild, txt = row.lastChild;
+    txt.innerText = it.t;
+    if (!opts.numbered) {
+      cb.checked = it.done;
+      cb.addEventListener('change', () => { it.done = cb.checked; row.classList.toggle('done', it.done); save(); });
+    }
+    txt.addEventListener('input', () => { it.t = txt.innerText.replace(/\n/g, ' ').trim(); save(); });
+    txt.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); add.focus(); }
+      if (e.key === 'Backspace' && !txt.innerText.trim()) {
+        e.preventDefault();
+        items.splice(j, 1); save();
+        buildChecklist(box, items, opts);
+        const prev = box.querySelectorAll('.ck-t')[j - 1];
+        prev ? focusEnd(prev) : box.querySelector('.ck-add').focus();
+      }
+    });
+    txt.addEventListener('blur', () => {
+      const k = items.indexOf(it);
+      if (!it.t && k >= 0) { items.splice(k, 1); save(); buildChecklist(box, items, opts); }
+    });
+    box.appendChild(row);
+  });
+
+  const commit = () => {
+    const t = add.value.trim();
+    if (!t) return false;
+    add.value = '';   // so a blur fired while the list rebuilds can't add it twice
+    items.push({ t, done: false }); save();
+    buildChecklist(box, items, opts);
+    return true;
+  };
+  add.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); if (commit()) box.querySelector('.ck-add').focus(); }
+    if (e.key === 'Backspace' && !add.value && items.length) {
+      e.preventDefault(); focusEnd(box.querySelectorAll('.ck-t')[items.length - 1]);
+    }
+  });
+  add.addEventListener('blur', commit);
+  box.appendChild(add);
+}
+
+function updateDcCount() {
+  const pts = state.rows.filter(r => rowHasData(r)).length;
+  const dc = state.rows.filter(r => r.dc).length;
+  $('dcCount').textContent = `D/C ${dc} ราย` + (pts ? ` · จาก ${pts} เตียง` : '');
+}
+
+function render() {
+  $('ward').value = state.ward;
+  $('date').value = state.date;
+  $('doctor').value = state.doctor;
+  tbody.innerHTML = '';
+  state.rows.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="td-bed" data-label="เตียง"><div class="cell bed" contenteditable data-k="bed" data-ph="#"></div></td>
+      <td data-label="Diagnosis"><div class="checklist dx"></div></td>
+      <td data-label="ไข้">
+        <div class="fever">
+          <div class="seg">
+            <button type="button" data-f="no">ไม่มี</button>
+            <button type="button" data-f="yes">มี</button>
+          </div>
+          <div class="temp"><span>T</span><input inputmode="decimal" placeholder="38.0"><span>°C</span></div>
+          <div class="fever-print"></div>
+        </div>
+      </td>
+      <td data-label="Objective"><div class="cell" contenteditable data-k="obj" data-ph="V/S, PE, Lab"></div></td>
+      <td data-label="Plan"><div class="cell" contenteditable data-k="plan" data-ph="Plan"></div></td>
+      <td data-label="สิ่งที่ต้องไปตรวจเพิ่ม"><div class="checklist"></div></td>
+      <td class="dc"><label><input type="checkbox" title="Discharge"><span class="dc-lbl">D/C</span></label></td>
+      <td class="act"><button type="button" title="ลบแถวนี้">✕</button></td>`;
+
+    buildChecklist(tr.querySelector('.checklist.dx'), r.dx, { numbered: true, ph: '+ Diagnosis' });
+    buildChecklist(tr.querySelector('.checklist:not(.dx)'), r.inv);
+
+    const dc = tr.querySelector('.dc input');
+    dc.checked = r.dc;
+    tr.classList.toggle('is-dc', r.dc);
+    dc.addEventListener('change', () => {
+      r.dc = dc.checked;
+      tr.classList.toggle('is-dc', r.dc);
+      save();
+    });
+
+    tr.querySelectorAll('.cell').forEach(c => {
+      c.innerText = r[c.dataset.k];
+      c.addEventListener('input', () => { r[c.dataset.k] = c.innerText.replace(/\n$/, ''); save(); });
+    });
+
+    const seg = tr.querySelectorAll('.seg button');
+    const tempBox = tr.querySelector('.temp');
+    const tempIn = tempBox.querySelector('input');
+    const fp = tr.querySelector('.fever-print');
+    const paint = () => {
+      seg[0].className = r.fever === 'no' ? 'on-no' : '';
+      seg[1].className = r.fever === 'yes' ? 'on-yes' : '';
+      tempBox.classList.toggle('show', r.fever === 'yes');
+      tempIn.classList.toggle('hot', parseFloat(r.temp) >= 38);
+      fp.innerHTML = feverPrint(r);
+    };
+    tempIn.value = r.temp;
+    seg.forEach(b => b.addEventListener('click', () => {
+      r.fever = r.fever === b.dataset.f ? '' : b.dataset.f;
+      paint(); save();
+      if (r.fever === 'yes') tempIn.focus();
+    }));
+    tempIn.addEventListener('input', () => { r.temp = tempIn.value.trim(); paint(); save(); });
+    paint();
+
+    tr.querySelector('.act button').addEventListener('click', () => {
+      const filled = Object.values(r).some(v => Array.isArray(v) ? v.length : v);
+      if (filled && !confirm('ลบข้อมูลเตียงนี้?')) return;
+      state.rows.splice(i, 1);
+      render(); save();
+    });
+    tbody.appendChild(tr);
+  });
+  updateDcCount();
+}
+
+['ward', 'date', 'doctor'].forEach(k => $(k).addEventListener('input', e => { state[k] = e.target.value; save(); }));
+
+$('add').addEventListener('click', () => {
+  state.rows.push(blankRow());
+  render(); save();
+  tbody.lastElementChild.querySelector('.cell').focus();
+});
+
+$('clear').addEventListener('click', () => {
+  if (!confirm('Clear ข้อมูลทั้งหมดในหน้านี้?')) return;
+  state = { ward: state.ward, doctor: state.doctor, date: today(), rows: Array.from({ length: 8 }, blankRow) };
+  render(); save();
+});
+
+function status(msg, err) {
+  const s = $('saved');
+  s.textContent = msg;
+  s.classList.toggle('err', !!err);
+}
+function rowHasData(r) {
+  return !!(r.bed || r.dx.length || r.fever || r.obj || r.plan || r.inv.length || r.dc);
+}
+
+$('pdf').addEventListener('click', () => {
+  const old = document.title;
+  document.title = ['Round', state.ward, state.date].filter(Boolean).join('_');
+  window.print();
+  document.title = old;
+});
+
+render();
+</script>
+</body>
+</html>
