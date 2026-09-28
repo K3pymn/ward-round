@@ -268,6 +268,7 @@
 <div class="wrap">
   <div class="toolbar">
     <button id="add" type="button">+ เพิ่มเตียง</button>
+    <button id="sortBtn" type="button" title="เรียงตามเลขเตียงจากน้อยไปมาก">เรียงเตียง ↑</button>
     <button id="clear" type="button" class="danger">Clear</button>
     <span class="saved" id="saved" role="status"></span>
     <span class="spacer"></span>
@@ -635,6 +636,23 @@ $('add').addEventListener('click', () => {
   state.rows.push(blankRow());
   render(); changed();
   tbody.lastElementChild.querySelector('.cell').focus();
+});
+
+// natural order (2 before 10, 12A after 12); rows without a bed number keep their order at the end
+$('sortBtn').addEventListener('click', () => {
+  const key = r => r.bed.trim();
+  const sorted = state.rows
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => {
+      const ka = key(a.r), kb = key(b.r);
+      if (!ka || !kb) return (!ka - !kb) || (a.i - b.i);
+      return ka.localeCompare(kb, 'th', { numeric: true, sensitivity: 'base' }) || (a.i - b.i);
+    })
+    .map(x => x.r);
+  if (sorted.every((r, i) => r === state.rows[i])) { status('เรียงตามเลขเตียงอยู่แล้ว'); return; }
+  state.rows = sorted;
+  render(); changed();
+  status('เรียงเตียงแล้ว');
 });
 
 $('clear').addEventListener('click', async () => {
