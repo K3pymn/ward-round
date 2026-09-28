@@ -285,6 +285,7 @@
   <div class="toolbar">
     <button id="add" type="button">+ เพิ่มเตียง</button>
     <button id="sortBtn" type="button" title="เรียงเตียงเลขก่อน แล้วตามด้วย V และ S">เรียงเตียง เลข → V → S</button>
+    <button id="removeDc" type="button" class="danger" hidden>ลบคนที่ D/C</button>
     <button id="clear" type="button" class="danger">Clear</button>
     <span class="saved" id="saved" role="status"></span>
     <span class="spacer"></span>
@@ -569,6 +570,8 @@ function updateDcCount() {
   const pts = state.rows.filter(rowHasData).length;
   const dc = state.rows.filter(r => r.dc).length;
   $('dcCount').textContent = `D/C ${dc} ราย` + (pts ? ` · จาก ${pts} เตียง` : '');
+  $('removeDc').hidden = !dc;
+  $('removeDc').textContent = `ลบคนที่ D/C (${dc})`;
 }
 
 function render() {
@@ -677,6 +680,16 @@ $('sortBtn').addEventListener('click', () => {
   state.rows = sorted;
   render(); changed();
   status('เรียงเตียงแล้ว');
+});
+
+$('removeDc').addEventListener('click', async () => {
+  const gone = state.rows.filter(r => r.dc);
+  if (!gone.length) return;
+  const beds = gone.map(r => r.bed || '(ไม่ระบุเลข)').join(', ');
+  if (!(await ask(`ลบ ${gone.length} เตียงที่ D/C ออกจาก round นี้? (เตียง ${beds})`, 'ลบ'))) return;
+  state.rows = state.rows.filter(r => !r.dc);
+  render(); changed();
+  status(`ลบ ${gone.length} เตียงที่ D/C แล้ว`);
 });
 
 $('clear').addEventListener('click', async () => {
