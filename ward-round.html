@@ -268,7 +268,7 @@
 <div class="wrap">
   <div class="toolbar">
     <button id="add" type="button">+ เพิ่มเตียง</button>
-    <button id="sortBtn" type="button" title="เรียงตามเลขเตียงจากน้อยไปมาก">เรียงเตียง ↑</button>
+    <button id="sortBtn" type="button" title="เรียงเตียง V ก่อน แล้วตามด้วย S เลขน้อยไปมาก">เรียงเตียง V → S</button>
     <button id="clear" type="button" class="danger">Clear</button>
     <span class="saved" id="saved" role="status"></span>
     <span class="spacer"></span>
@@ -638,7 +638,13 @@ $('add').addEventListener('click', () => {
   tbody.lastElementChild.querySelector('.cell').focus();
 });
 
-// natural order (2 before 10, 12A after 12); rows without a bed number keep their order at the end
+// V beds first, then S beds, then any other bed; natural order inside each group
+// (V2 before V10); rows without a bed number keep their order at the end
+const BED_GROUPS = ['V', 'S'];
+function bedGroup(bed) {
+  const g = BED_GROUPS.indexOf(bed.charAt(0).toUpperCase());
+  return g < 0 ? BED_GROUPS.length : g;
+}
 $('sortBtn').addEventListener('click', () => {
   const key = r => r.bed.trim();
   const sorted = state.rows
@@ -646,7 +652,8 @@ $('sortBtn').addEventListener('click', () => {
     .sort((a, b) => {
       const ka = key(a.r), kb = key(b.r);
       if (!ka || !kb) return (!ka - !kb) || (a.i - b.i);
-      return ka.localeCompare(kb, 'th', { numeric: true, sensitivity: 'base' }) || (a.i - b.i);
+      return (bedGroup(ka) - bedGroup(kb))
+        || ka.localeCompare(kb, 'th', { numeric: true, sensitivity: 'base' }) || (a.i - b.i);
     })
     .map(x => x.r);
   if (sorted.every((r, i) => r === state.rows[i])) { status('เรียงตามเลขเตียงอยู่แล้ว'); return; }
