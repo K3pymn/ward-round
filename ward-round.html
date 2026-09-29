@@ -403,6 +403,7 @@ function status(msg, err) {
 // ---------- cloud (claude.ai artifact db): one document per round date ----------
 let cloud = null, unsub = null, loaded = false, writing = false, readOnly = false;
 let flushTimer = null, pendingRemote = null;
+let stickyNote = '';   // e.g. the carry-over message, kept through the save that follows it
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function scheduleFlush(ms = 800) {
@@ -417,8 +418,9 @@ async function flush() {
   const snap = JSON.parse(JSON.stringify(state));
   status('กำลังบันทึก…');
   try {
-    await cloud.doc('rounds/' + snap.date).set({ round: snap });
-    if (!dirty) { status('☁ บันทึกบน cloud แล้ว ' + hhmm()); saveLocalNow(); }
+    // top-level `date` lets a new day find the previous round with one query
+    await cloud.doc('rounds/' + snap.date).set({ date: snap.date, round: snap });
+    if (!dirty) { status((stickyNote ? stickyNote + ' · ' : '') + '☁ บันทึกบน cloud แล้ว ' + hhmm()); stickyNote = ''; saveLocalNow(); }
   } catch (e) {
     dirty = true; saveLocalNow();
     const code = e && e.code;
@@ -460,12 +462,14 @@ function subscribe(date) {
     if (!snap.exists) {
       // nothing in the cloud for this date yet: upload what this device has
       if (dirty || (first && hasData())) { dirty = true; scheduleFlush(0); }
-      else status('☁ round ใหม่ของวันที่ ' + date);
+      else startNewRound(date);
       return;
     }
     const remote = normalize(snap.data().round);
     remote.date = date;
-    if (same(remote, state)) { if (!dirty && !writing) status('☁ ซิงก์แล้ว ' + hhmm()); return; }
+    // a round that exists but has no beds yet still gets the previous day's patients
+    if (first && !dirty && !hasData() && !remote.rows.some(rowHasData)) { startNewRound(date); return; }
+    if (same(remote, state)) { if (first && !dirty && !writing) status('☁ ซิงก์แล้ว ' + hhmm()); return; }
     if (dirty || writing) { if (first) scheduleFlush(0); return; }   // this device's newer edits win
     if (editing()) { pendingRemote = remote; return; }
     applyRemote(remote, first ? '☁ โหลดจาก cloud แล้ว ' + hhmm() : undefined);
@@ -473,6 +477,41 @@ function subscribe(date) {
     status('เชื่อมต่อ cloud ไม่ได้ ข้อมูลยังบันทึกในเครื่องนี้', true);
     if (err && err.code === 'unavailable') setTimeout(() => { if (cloud && state.date === date) subscribe(date); }, 5000);
   });
+}
+
+// ---------- new day: bring forward the patients still admitted ----------
+// Carries bed, Diagnosis and Plan; fever, Objective, Order, bedside checks and D/C start
+// empty each day, and beds ticked D/C on the previous round are left behind.
+function carryOver(prev, date) {
+  const rows = prev.rows
+    .filter(r => !r.dc && (r.bed || r.dx.length || r.plan))
+    .map(r => Object.assign(blankRow(), { bed: r.bed, dx: r.dx.map(d => ({ t: d.t, done: false })), plan: r.plan }));
+  rows.push(blankRow(), blankRow());   // room for new admissions
+  return { ward: state.ward || prev.ward, doctor: state.doctor || prev.doctor, date, rows };
+}
+async function findPrevRound(date) {
+  const col = cloud.collection('rounds');
+  const withBeds = docs => docs.map(d => normalize(d.data().round)).find(r => r.rows.some(rowHasData));
+  try {
+    const q = await col.where('date', '<', date).orderBy('date', 'desc').limit(10).get();
+    const hit = withBeds(q.docs);
+    if (hit) return hit;
+  } catch (e) {}
+  // rounds saved before the top-level date field existed: scan by id (ids are dates)
+  const all = await col.get();
+  return withBeds(all.docs.filter(d => d.id < date).reverse()) || null;
+}
+async function startNewRound(date) {
+  let prev = null;
+  try { prev = await findPrevRound(date); } catch (e) {}
+  if (date !== state.date || dirty || hasData()) return;   // the viewer started typing meanwhile
+  // only today or later: looking back at an empty past date shouldn't create a round
+  if (!prev || date < today()) { status('☁ round ใหม่ของวันที่ ' + date); return; }
+  state = carryOver(prev, date);
+  render(); changed();
+  const n = state.rows.filter(rowHasData).length;
+  stickyNote = `ยก ${n} เตียงมาจาก round วันที่ ${prev.date.split('-').reverse().join('/')}`;
+  status(stickyNote);
 }
 
 async function switchDate(date) {
